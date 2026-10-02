@@ -207,6 +207,8 @@ body[data-modo="mayor"] .card .price__main:not(.price__main--muted) { color: var
 .footer__info dd { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
 .footer__bottom { background: var(--verde); color: #fff; font-size: .8rem; }
 .footer__bottom-inner { display: flex; justify-content: space-between; align-items: center; padding-block: 10px; gap: 12px; }
+.footer__credit { padding: 10px 16px; background: #fff; text-align: center; font-size: .75rem; color: var(--muted); letter-spacing: .02em; }
+.footer__credit strong { color: #6D28D9; font-weight: 700; }
 .footer__admin { border: 0; background: none; color: rgba(255, 255, 255, .75); cursor: pointer; font-size: .8rem; text-decoration: underline; }
 
 .wa-float {
