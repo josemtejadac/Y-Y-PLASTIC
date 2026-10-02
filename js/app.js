@@ -127,6 +127,14 @@
     renderProductos();
   }
 
+  // ---------- Íconos del pie de página ----------
+  const svg = (d, vb = '0 0 24 24') => `<svg viewBox="${vb}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const ICONOS = {
+    whatsapp: svg('M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3Zm0 23.6c-2 0-3.9-.5-5.6-1.5l-.4-.2-3.9 1 1-3.8-.3-.4A10.6 10.6 0 1 1 16 26.6Zm5.8-7.9c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2l-1 1.2c-.2.2-.4.2-.7.1a8.7 8.7 0 0 1-4.3-3.8c-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.5l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7 6.3 6.3 0 0 0 1.3 3.3 14.4 14.4 0 0 0 5.5 4.9c2 .9 2.9 1 3.9.8a3.3 3.3 0 0 0 2.2-1.5 2.7 2.7 0 0 0 .2-1.5c-.1-.2-.3-.3-.6-.4Z', '0 0 32 32'),
+    instagram: svg('M12 2.2c3.2 0 3.6 0 4.8.1 3.3.1 4.8 1.7 4.9 4.9.1 1.3.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 3.2-1.7 4.8-4.9 4.9-1.3.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-3.3-.1-4.8-1.7-4.9-4.9-.1-1.3-.1-1.6-.1-4.8s0-3.6.1-4.8C2.4 4 3.9 2.4 7.2 2.3c1.2-.1 1.6-.1 4.8-.1ZM12 0C8.7 0 8.3 0 7.1.1 2.7.3.3 2.7.1 7.1 0 8.3 0 8.7 0 12s0 3.7.1 4.9c.2 4.4 2.6 6.8 7 7 1.2.1 1.6.1 4.9.1s3.7 0 4.9-.1c4.4-.2 6.8-2.6 7-7 .1-1.2.1-1.6.1-4.9s0-3.7-.1-4.9c-.2-4.4-2.6-6.8-7-7C15.7 0 15.3 0 12 0Zm0 5.8a6.2 6.2 0 1 0 0 12.4 6.2 6.2 0 0 0 0-12.4ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.4-11.8a1.4 1.4 0 1 0 0 2.9 1.4 1.4 0 0 0 0-2.9Z'),
+    direccion: svg('M12 2a7 7 0 0 0-7 7c0 5.3 7 13 7 13s7-7.7 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z'),
+    horario: svg('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7Z'),
+  };
   // ---------- Render: datos del negocio ----------
   function renderConfig() {
     const c = state.config;
@@ -134,18 +142,18 @@
     $('#footerEslogan').textContent = c.eslogan || '';
     $('#notaPrecio').textContent = state.modo === 'mayor' ? (c.nota_mayor || '') : 'Precios al detalle (por unidad o paquete).';
 
-    const filas = [];
-    if (c.direccion) filas.push(['Dirección', esc(c.direccion)]);
-    if (c.horario) filas.push(['Horario', esc(c.horario)]);
-    if (c.telefono) filas.push(['Teléfono', `<a href="tel:${esc(c.telefono.replace(/\s/g, ''))}">${esc(c.telefono)}</a>`]);
-    if (c.whatsapp) filas.push(['WhatsApp', `<a href="${esc(linkWhatsapp('Hola Y&Y Plastic!'))}" target="_blank" rel="noopener">${esc(c.whatsapp)}</a>`]);
-    if (c.email) filas.push(['Correo', `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`]);
-    const redes = ['instagram', 'facebook', 'tiktok'].filter((k) => c[k])
-      .map((k) => `<a href="${esc(c[k])}" target="_blank" rel="noopener">${k[0].toUpperCase() + k.slice(1)}</a>`);
-    if (redes.length) filas.push(['Redes', redes.join(' · ')]);
-    $('#footerInfo').innerHTML =
-      (c.descripcion ? `<p class="footer__desc">${esc(c.descripcion)}</p>` : '') +
-      `<dl>${filas.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+    const waLink = linkWhatsapp('Hola Y&Y Plastic! Quisiera hacer una consulta.');
+    const redes = [
+      ['whatsapp', waLink, 'WhatsApp'],
+      ['instagram', c.instagram, 'Instagram'],
+    ].filter(([, url]) => url);
+    const datos = [['direccion', c.direccion], ['horario', c.horario]].filter(([, v]) => v);
+
+    $('#footerInfo').innerHTML = `
+      ${c.descripcion ? `<p class="footer__desc">${esc(c.descripcion)}</p>` : ''}
+      ${redes.length ? `<div class="socials">${redes.map(([k, url, label]) =>
+        `<a class="social social--${k}" href="${esc(url)}" target="_blank" rel="noopener">${ICONOS[k]}<span>${label}</span></a>`).join('')}</div>` : ''}
+      ${datos.length ? `<ul class="footer__data">${datos.map(([k, v]) => `<li>${ICONOS[k]}<span>${esc(v)}</span></li>`).join('')}</ul>` : ''}`;
 
     const wa = linkWhatsapp('Hola Y&Y Plastic! Quisiera hacer una consulta.');
     const fl = $('#waFloat');
