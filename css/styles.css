@@ -31,6 +31,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 img { max-width: 100%; display: block; }
+[hidden] { display: none !important; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--verde-osc); }
 
@@ -305,10 +306,11 @@ body.is-admin .wa-float { bottom: 88px; }
 .toast {
   position: fixed; left: 50%; top: 18px; translate: -50% -150%; z-index: 100;
   padding: .7em 1.2em; border-radius: 12px; background: var(--carbon); color: #fff;
-  font-weight: 500; box-shadow: var(--shadow); transition: translate .3s;
+  font-weight: 500; box-shadow: var(--shadow); transition: translate .3s, opacity .3s;
   max-width: calc(100% - 32px);
+  opacity: 0; pointer-events: none;
 }
-.toast.is-visible { translate: -50% 0; }
+.toast.is-visible { translate: -50% 0; opacity: 1; }
 .toast--error { background: var(--rojo); }
 
 /* ===== Responsive ===== */
