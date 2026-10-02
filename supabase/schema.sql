@@ -85,6 +85,14 @@ create policy "yyplastic productos lectura"  on public.yyplastic_productos  for 
 create policy "yyplastic carrusel lectura"   on public.yyplastic_carrusel   for select using (activo);
 -- yyplastic_admin no tiene política: nadie la lee desde el navegador.
 
+-- Borrado lógico: "eliminar" marca eliminado = true (recuperable desde el SQL Editor).
+alter table public.yyplastic_productos  add column if not exists eliminado boolean not null default false;
+alter table public.yyplastic_categorias add column if not exists eliminado boolean not null default false;
+alter table public.yyplastic_carrusel   add column if not exists eliminado boolean not null default false;
+create policy "yyplastic productos sin eliminados"  on public.yyplastic_productos  as restrictive for select using (not eliminado);
+create policy "yyplastic categorias sin eliminadas" on public.yyplastic_categorias as restrictive for select using (not eliminado);
+create policy "yyplastic carrusel sin eliminados"   on public.yyplastic_carrusel   as restrictive for select using (not eliminado);
+
 -- ---------- Funciones admin (security definer, validan la clave) ----------
 create or replace function public.yyplastic_check_password(p_password text)
 returns boolean language plpgsql security definer set search_path = public, extensions as $$
@@ -101,7 +109,6 @@ begin
     raise exception 'Clave de administrador incorrecta' using errcode = '28000';
   end if;
 end; $$;
-revoke all on function public.yyplastic_require_admin(text) from public, anon, authenticated;
 
 create or replace function public.yyplastic_cambiar_clave(p_password text, p_nueva text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
@@ -116,14 +123,14 @@ create or replace function public.yyplastic_admin_productos(p_password text)
 returns setof public.yyplastic_productos language plpgsql security definer set search_path = public as $$
 begin
   perform public.yyplastic_require_admin(p_password);
-  return query select * from public.yyplastic_productos order by destacado desc, orden, id desc;
+  return query select * from public.yyplastic_productos where not eliminado order by destacado desc, orden, id desc;
 end; $$;
 
 create or replace function public.yyplastic_admin_carrusel(p_password text)
 returns setof public.yyplastic_carrusel language plpgsql security definer set search_path = public as $$
 begin
   perform public.yyplastic_require_admin(p_password);
-  return query select * from public.yyplastic_carrusel order by orden, id;
+  return query select * from public.yyplastic_carrusel where not eliminado order by orden, id;
 end; $$;
 
 create or replace function public.yyplastic_guardar_producto(p_password text, p jsonb)
@@ -166,7 +173,7 @@ create or replace function public.yyplastic_eliminar_producto(p_password text, p
 returns void language plpgsql security definer set search_path = public as $$
 begin
   perform public.yyplastic_require_admin(p_password);
-  delete from public.yyplastic_productos where id = p_id;
+  update public.yyplastic_productos set eliminado = true, activo = false, actualizado_en = now() where id = p_id;
 end; $$;
 
 create or replace function public.yyplastic_guardar_categoria(p_password text, p_id bigint, p_nombre text, p_orden int)
@@ -188,7 +195,8 @@ create or replace function public.yyplastic_eliminar_categoria(p_password text, 
 returns void language plpgsql security definer set search_path = public as $$
 begin
   perform public.yyplastic_require_admin(p_password);
-  delete from public.yyplastic_categorias where id = p_id;
+  update public.yyplastic_productos set categoria_id = null where categoria_id = p_id;
+  update public.yyplastic_categorias set eliminado = true where id = p_id;
 end; $$;
 
 create or replace function public.yyplastic_guardar_slide(p_password text, p jsonb)
@@ -217,7 +225,7 @@ create or replace function public.yyplastic_eliminar_slide(p_password text, p_id
 returns void language plpgsql security definer set search_path = public as $$
 begin
   perform public.yyplastic_require_admin(p_password);
-  delete from public.yyplastic_carrusel where id = p_id;
+  update public.yyplastic_carrusel set eliminado = true, activo = false where id = p_id;
 end; $$;
 
 create or replace function public.yyplastic_guardar_config(p_password text, p jsonb)
