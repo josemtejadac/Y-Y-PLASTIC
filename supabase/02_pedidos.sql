@@ -1,0 +1,26 @@
+-- =====================================================================
+-- Y&Y PLASTIC · Pedidos con retiro en tienda + sesiones de admin
+-- (aplicado en Supabase como migraciones yyplastic_09 / 10 / 11)
+-- =====================================================================
+-- Resumen de lo creado:
+--  * yyplastic_sesiones: tokens de sesión del admin (180 días). check_password
+--    acepta la clave o un token "yyt_...". Funciones: yyplastic_login,
+--    yyplastic_logout, yyplastic_cambiar_clave_sesion (cierra las demás sesiones).
+--  * yyplastic_pedidos / yyplastic_pedido_items (sin políticas RLS: privados).
+--    Folio correlativo desde 1001 y codigo_seguimiento secreto para el cliente.
+--    Campos listos para pasarela: metodo_pago ('en_tienda'|'online'),
+--    estado_pago, pago_proveedor, pago_referencia, pago_fecha.
+--  * yyplastic_crear_pedido(cliente, items, metodo_pago): calcula precios en el
+--    servidor (precio al mayor automático desde minimo_mayor).
+--  * yyplastic_ver_pedido(codigo): seguimiento público con el código.
+--  * yyplastic_admin_pedidos / yyplastic_actualizar_pedido: panel del dueño.
+--  * Trigger yyplastic_pedidos_aviso -> realtime.send(..., 'yyplastic-pedidos', false)
+--    con solo id/folio; el panel admin trae el detalle con su token.
+--  * Config: pago_online_activo ('no' por ahora), retiro_direccion, retiro_instrucciones.
+--
+-- PENDIENTE para la pasarela (Flow / Webpay / Mercado Pago):
+--  1. Función servidor (Cloudflare Pages Function o Supabase Edge Function) que cree
+--     la transacción con la clave secreta del proveedor y devuelva la URL de pago.
+--  2. Webhook del proveedor -> actualiza estado_pago/pago_referencia usando la
+--     service_role key (nunca desde el navegador).
+--  3. Poner pago_online_activo = 'si' para mostrar la opción en el carrito.

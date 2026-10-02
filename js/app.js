@@ -255,6 +255,8 @@
         <h3 class="card__name">${esc(p.nombre)}</h3>
         ${p.unidad ? `<span class="card__unit">${esc(p.unidad)}</span>` : ''}
         ${bloquePrecio(p)}
+        ${p.precio_detalle !== null || p.precio_mayor !== null
+          ? `<button class="btn btn--small card__add" data-accion="agregar" aria-label="Agregar ${esc(p.nombre)} al carrito">Agregar</button>` : ''}
       </div>
       <div class="card__admin admin-only">
         <button class="btn btn--small" data-accion="editar">Editar</button>
@@ -283,6 +285,7 @@
     if (accion === 'nuevo') return window.YYAdmin?.editarProducto(null);
     if (accion === 'editar') return window.YYAdmin?.editarProducto(p);
     if (accion === 'eliminar') return window.YYAdmin?.eliminarProducto(p);
+    if (accion === 'agregar') return window.YYCarrito?.agregar(p, 1);
     if (p) verProducto(p);
   });
   $('#grid').addEventListener('keydown', (e) => {
@@ -316,7 +319,8 @@
             </div>
           </div>
           ${p.descripcion ? `<p class="product__desc">${esc(p.descripcion).replace(/\n/g, '<br>')}</p>` : ''}
-          ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">Pedir por WhatsApp</a>` : ''}
+          <div id="pvCarrito"></div>
+          ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">Consultar por WhatsApp</a>` : ''}
           <button class="btn btn--small admin-only" id="pvEditar">Editar producto</button>
         </div>
       </div>`, 'modal--wide');
@@ -327,6 +331,7 @@
       body.querySelectorAll('.product__thumbs button').forEach((x) => x.classList.toggle('is-active', x === b));
     });
     body.querySelector('#pvEditar')?.addEventListener('click', () => window.YYAdmin?.editarProducto(p));
+    window.YYCarrito?.montarEnFicha(body.querySelector('#pvCarrito'), p);
   }
 
   // ---------- Modo de precio ----------
@@ -373,7 +378,7 @@
 
   // API compartida con admin.js
   window.YY = {
-    sb, state, $, $$, esc, toast, abrirModal, cerrarModal, urlFoto, error, nombreCategoria,
+    sb, state, $, $$, esc, toast, abrirModal, cerrarModal, urlFoto, error, nombreCategoria, precio, fmt, linkWhatsapp, storage,
     async recargarTodo() {
       if (state.admin) state.admin.productos = null;
       await Promise.all([cargarConfig(), cargarCategorias(), cargarSlides()]);

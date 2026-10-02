@@ -1,16 +1,17 @@
 // Y&Y Plastic — modo administrador
 // Se activa con el botón "Admin" del pie de página (o abriendo la web con ?admin).
-// La clave se valida en Supabase (función yyplastic_check_password); cada cambio
-// vuelve a enviarla y el servidor la verifica antes de guardar.
+// Al entrar, Supabase entrega un token de sesión (yyplastic_login) que queda guardado
+// en este dispositivo: el dueño sigue conectado aunque cierre el navegador.
+// Cada cambio envía el token y el servidor lo verifica antes de guardar.
 (() => {
   const { sb, state, $, esc, toast, abrirModal, cerrarModal, urlFoto, error } = window.YY;
   const C = window.YY_CONFIG;
-  const KEY = 'yy_admin_pw';
+  const KEY = 'yy_admin_token';
 
   const ses = {
-    get() { try { return sessionStorage.getItem(KEY); } catch { return null; } },
-    set(v) { try { sessionStorage.setItem(KEY, v); } catch { /* sin storage */ } },
-    del() { try { sessionStorage.removeItem(KEY); } catch { /* sin storage */ } },
+    get() { try { return localStorage.getItem(KEY); } catch { return null; } },
+    set(v) { try { localStorage.setItem(KEY, v); } catch { /* sin storage */ } },
+    del() { try { localStorage.removeItem(KEY); } catch { /* sin storage */ } },
   };
 
   const pw = () => state.admin?.password;
@@ -25,19 +26,35 @@
   }
 
   // ---------- Entrar / salir ----------
-  async function entrar(password, silencioso = false) {
-    const { data, error: e } = await sb.rpc('yyplastic_check_password', { p_password: password });
-    if (e) throw e;
-    if (!data) { if (!silencioso) toast('Clave incorrecta', 'error'); return false; }
-    state.admin = { password, productos: null };
-    ses.set(password);
+  async function activar(token) {
+    state.admin = { password: token, productos: null };
+    ses.set(token);
     document.body.classList.add('is-admin');
     await window.YY.recargarTodo();
-    if (!silencioso) toast('Modo admin activado');
+    window.YYPedidos?.iniciar();
+  }
+
+  async function entrar(password) {
+    const { data: token, error: e } = await sb.rpc('yyplastic_login', {
+      p_password: password, p_dispositivo: navigator.userAgent.slice(0, 200),
+    });
+    if (e) { if (e.code === '28000') { toast('Clave incorrecta', 'error'); return false; } throw e; }
+    await activar(token);
+    toast('Modo admin activado');
     return true;
   }
 
+  async function reanudar(token) {
+    const { data, error: e } = await sb.rpc('yyplastic_check_password', { p_password: token });
+    if (e) throw e;
+    if (!data) { ses.del(); return; }
+    await activar(token);
+  }
+
   function salir() {
+    const token = pw();
+    if (token) sb.rpc('yyplastic_logout', { p_password: token }).then(() => {}, () => {});
+    window.YYPedidos?.detener();
     state.admin = null;
     ses.del();
     document.body.classList.remove('is-admin');
@@ -65,6 +82,7 @@
 
   document.querySelector('#adminbar').addEventListener('click', (e) => {
     const a = e.target.closest('[data-admin]')?.dataset.admin;
+    if (a === 'pedidos') window.YYPedidos?.abrir();
     if (a === 'nuevo') editarProducto(null);
     if (a === 'categorias') gestionarCategorias();
     if (a === 'carrusel') gestionarCarrusel();
@@ -331,6 +349,8 @@
       ['email', 'Correo'],
       ['direccion', 'Dirección'],
       ['horario', 'Horario de atención'],
+      ['retiro_direccion', 'Dirección de retiro de pedidos (si es distinta)'],
+      ['retiro_instrucciones', 'Mensaje para el cliente al hacer un pedido', 'textarea'],
       ['instagram', 'Instagram (URL)'],
       ['facebook', 'Facebook (URL)'],
       ['tiktok', 'TikTok (URL)'],
@@ -361,6 +381,7 @@
     const body = abrirModal(`
       <form class="form" id="fPw">
         <h2>Cambiar clave de admin</h2>
+        <p class="form__hint">Al cambiarla se cierra la sesión en los demás dispositivos.</p>
         <label>Nueva clave<input type="password" name="n1" minlength="6" required autocomplete="new-password"></label>
         <label>Repetir nueva clave<input type="password" name="n2" minlength="6" required autocomplete="new-password"></label>
         <div class="form__actions"><button class="btn" type="submit">Cambiar</button></div>
@@ -370,9 +391,9 @@
       const { n1, n2 } = e.target;
       if (n1.value !== n2.value) return toast('Las claves no coinciden', 'error');
       try {
-        await rpc('yyplastic_cambiar_clave', { p_nueva: n1.value });
-        state.admin.password = n1.value;
-        ses.set(n1.value);
+        const token = await rpc('yyplastic_cambiar_clave_sesion', { p_nueva: n1.value });
+        state.admin.password = token;
+        ses.set(token);
         cerrarModal();
         toast('Clave actualizada');
       } catch (err) { error(err); }
@@ -382,7 +403,8 @@
   window.YYAdmin = { editarProducto, eliminarProducto };
 
   // ---------- Reanudar sesión o abrir con ?admin ----------
+  try { sessionStorage.removeItem('yy_admin_pw'); } catch { /* versión anterior */ }
   const guardada = ses.get();
-  if (guardada) entrar(guardada, true).catch(() => ses.del());
+  if (guardada) reanudar(guardada).catch(error);
   else if (new URLSearchParams(location.search).has('admin')) pedirClave();
 })();

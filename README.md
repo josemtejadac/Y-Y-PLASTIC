@@ -14,9 +14,12 @@ css/styles.css      Estilos (colores del branding en :root)
 js/config.js        URL y clave publicable de Supabase
 js/app.js           Catálogo, carrusel, filtros, ficha de producto
 js/admin.js         Modo admin (productos, categorías, carrusel, datos, clave)
+js/carrito.js       Carrito, pedido con retiro en tienda y seguimiento (?pedido=)
+js/pedidos-admin.js Pedidos en tiempo real para el dueño (sonido + aviso)
 js/imagenes.js      Compresión de fotos en el navegador (WebP, máx. 1400/1920 px)
 assets/             Logo, logo horizontal e isotipo en SVG
-supabase/schema.sql Tablas, permisos y funciones del proyecto
+supabase/schema.sql Tablas, permisos y funciones del catálogo
+supabase/02_pedidos.sql Pedidos, sesiones de admin y pasos para la pasarela de pago
 ```
 
 ## Espacio en la base de datos "Proyectos varios"
@@ -31,8 +34,11 @@ Para crearlo, ejecutar `supabase/schema.sql` en el SQL Editor de Supabase.
 
 ## Modo administrador
 
-Botón **Admin** en el pie de página (o abrir la web con `?admin`). Clave inicial: `admin1234`
-— cámbiala desde la barra de admin → *Cambiar clave*.
+Botón **Admin** en el pie de página (o abrir la web con `?admin`). La sesión queda iniciada
+en ese dispositivo (token de 180 días); cambiar la clave cierra las demás sesiones.
+
+Los pedidos llegan en tiempo real al botón **Pedidos** de la barra admin (sonido, contador
+en la pestaña y notificación del navegador si se activa).
 
 ## Despliegue en Cloudflare Pages
 
