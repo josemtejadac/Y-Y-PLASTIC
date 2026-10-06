@@ -162,61 +162,33 @@
   }
 
   // ---------- Render: carrusel ----------
-  const hero = { idx: 0, timer: null };
-
+  // Franja de fotos que avanza de forma continua (se duplica la lista para que el giro no tenga cortes).
   function renderCarrusel() {
-    const slides = state.slides.length
-      ? state.slides
-      : [{ id: 'default', default: true }];
-    $('#heroTrack').innerHTML = slides.map((s) => s.default
-      ? `<div class="hero__slide hero__slide--brand">
+    const hero = $('#hero');
+    const slides = state.slides;
+    if (!slides.length) {
+      hero.classList.remove('is-marquee');
+      $('#heroTrack').innerHTML = `<div class="hero__slide hero__slide--brand">
            <div class="hero__brand">
              <img src="assets/logo.svg" alt="Y&Y Plastic">
-             <p>${esc(state.config.eslogan || 'Soluciones prácticas para tu cocina.')}</p>
+             <p>${esc(state.config.eslogan || 'Tu aliado en envases para restaurantes, foodtrucks y delivery.')}</p>
              <a href="#catalogo" class="btn">Ver catálogo</a>
            </div>
-         </div>`
-      : `<div class="hero__slide${s.activo === false ? ' is-hidden-slide' : ''}">
-           <img src="${esc(urlFoto(s.imagen_url))}" alt="${esc(s.titulo)}" loading="lazy">
-           ${s.titulo || s.subtitulo ? `<div class="hero__caption">
-             ${s.titulo ? `<h2>${esc(s.titulo)}</h2>` : ''}
-             ${s.subtitulo ? `<p>${esc(s.subtitulo)}</p>` : ''}
-             ${s.enlace ? `<a class="btn" href="${esc(s.enlace)}">Ver más</a>` : ''}
-           </div>` : ''}
-         </div>`).join('');
-    $('#heroDots').innerHTML = slides.length > 1
-      ? slides.map((_, i) => `<button aria-label="Ir a la imagen ${i + 1}" data-i="${i}"></button>`).join('')
-      : '';
-    $('#hero').classList.toggle('is-single', slides.length < 2);
-    const first = $('#heroTrack img');
-    if (first) first.loading = 'eager';
-    irA(0);
+         </div>`;
+      return;
+    }
+    hero.classList.add('is-marquee');
+    const item = (s, copia) => {
+      const img = `<img src="${esc(urlFoto(s.imagen_url))}" alt="${copia ? '' : esc(s.titulo || 'Y&Y Plastic')}" loading="${copia ? 'lazy' : 'eager'}" draggable="false">`;
+      const cls = `marquee__item${s.activo === false ? ' is-hidden-slide' : ''}`;
+      return s.enlace
+        ? `<a class="${cls}" href="${esc(s.enlace)}"${copia ? ' aria-hidden="true" tabindex="-1"' : ''}>${img}</a>`
+        : `<div class="${cls}"${copia ? ' aria-hidden="true"' : ''}>${img}</div>`;
+    };
+    const track = $('#heroTrack');
+    track.innerHTML = slides.map((s) => item(s, false)).join('') + slides.map((s) => item(s, true)).join('');
+    track.style.setProperty('--duracion', `${Math.max(20, slides.length * 4)}s`);
   }
-
-  function irA(i) {
-    const n = $$('.hero__slide').length;
-    if (!n) return;
-    hero.idx = (i + n) % n;
-    $('#heroTrack').style.transform = `translateX(-${hero.idx * 100}%)`;
-    $$('#heroDots button').forEach((b, j) => b.classList.toggle('is-active', j === hero.idx));
-    clearInterval(hero.timer);
-    if (n > 1) hero.timer = setInterval(() => irA(hero.idx + 1), 5500);
-  }
-
-  $('#heroPrev').addEventListener('click', () => irA(hero.idx - 1));
-  $('#heroNext').addEventListener('click', () => irA(hero.idx + 1));
-  $('#heroDots').addEventListener('click', (e) => { if (e.target.dataset.i) irA(+e.target.dataset.i); });
-  (() => { // swipe en móvil
-    let x0 = null;
-    const tr = $('#heroTrack');
-    tr.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
-    tr.addEventListener('touchend', (e) => {
-      if (x0 === null) return;
-      const dx = e.changedTouches[0].clientX - x0;
-      if (Math.abs(dx) > 40) irA(hero.idx + (dx < 0 ? 1 : -1));
-      x0 = null;
-    });
-  })();
 
   // ---------- Render: categorías ----------
   function renderChips() {

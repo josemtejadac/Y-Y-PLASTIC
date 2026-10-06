@@ -273,7 +273,7 @@
     const body = abrirModal(`
       <div class="form">
         <h2>Carrusel de fotos</h2>
-        <p class="form__hint">Tamaño recomendado: horizontal (ej. 1920×800). Las fotos se comprimen al subirlas. Si no hay diapositivas se muestra el logo.</p>
+        <p class="form__hint">Las fotos pasan en una franja continua; se ven mejor verticales o cuadradas (ej. 1080×1350, como las de Instagram). Las fotos se comprimen al subirlas. Si no hay diapositivas se muestra el logo.</p>
         <div class="slides" id="slideList">
           ${state.slides.map((s) => `
             <div class="slide-row" data-id="${s.id}">

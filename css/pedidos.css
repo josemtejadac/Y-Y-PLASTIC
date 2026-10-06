@@ -103,3 +103,15 @@
   .cart-btn { order: 2; margin-left: auto; }
   .price-toggle { order: 3; width: 100%; margin-left: 0; }
 }
+
+.pay--pagado { color: var(--verde-osc); }
+.pay--fallido { color: var(--rojo); }
+.pay-banner { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: var(--crema); font-weight: 600; text-align: center; }
+.pay-banner--ok { background: rgba(68, 165, 127, .14); color: var(--verde-osc); }
+.pay-banner--error { background: rgba(214, 69, 69, .1); color: var(--rojo); }
+#btnPagar { width: 100%; margin-top: 8px; }
+.order__rut { color: var(--muted); }
+.pay-chip { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 700; background: var(--crema); color: var(--muted); }
+.pay-chip--pagado { background: rgba(68, 165, 127, .15); color: var(--verde-osc); }
+.pay-chip--fallido { background: rgba(214, 69, 69, .1); color: var(--rojo); }
+.order__pay { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }

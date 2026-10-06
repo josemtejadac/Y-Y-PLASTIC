@@ -18,9 +18,12 @@
     const { data, error: e } = await sb.rpc('yyplastic_admin_pedidos', { p_password: state.admin.password, p_limite: 200 });
     if (e) throw e;
     const nuevos = conocidos ? data.filter((p) => !conocidos.has(p.id)) : [];
+    const pagados = conocidos ? data.filter((p) => conocidos.has(p.id) && p.estado_pago === 'pagado'
+      && pedidos.find((x) => x.id === p.id)?.estado_pago !== 'pagado') : [];
     pedidos = data;
     conocidos = new Set(data.map((p) => p.id));
-    nuevos.forEach(alertar);
+    nuevos.forEach((p) => alertar(p));
+    pagados.forEach((p) => alertar(p, true));
     pintarBadge();
     if (panelAbierto) pintarPanel();
   }
@@ -50,12 +53,12 @@
     } catch { /* sin audio */ }
   }
 
-  function alertar(p) {
+  function alertar(p, pago = false) {
     sonar();
-    toast(`🛒 Nuevo pedido #${p.folio} · ${p.cliente_nombre} · ${precio(p.total)}`);
+    toast(pago ? `💳 Pago recibido · pedido #${p.folio} · ${precio(p.total)}` : `🛒 Nuevo pedido #${p.folio} · ${p.cliente_nombre} · ${precio(p.total)}`);
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
-        const n = new Notification(`Nuevo pedido #${p.folio}`, {
+        const n = new Notification(pago ? `Pago recibido #${p.folio}` : `Nuevo pedido #${p.folio}`, {
           body: `${p.cliente_nombre} · ${precio(p.total)} · retiro en tienda`, icon: 'assets/isotipo.svg', tag: `yy-${p.id}`,
         });
         n.onclick = () => { window.focus(); abrir(); };
@@ -106,10 +109,14 @@
             <strong>#${p.folio}</strong> ${p.visto ? '' : '<span class="badge badge--inline">Nuevo</span>'}
             <small>${fecha(p.creado_en)}</small>
           </div>
-          <strong class="order__total">${precio(p.total)}</strong>
+          <div class="order__pay">
+            <strong class="order__total">${precio(p.total)}</strong>
+            <span class="pay-chip pay-chip--${p.estado_pago}">${p.metodo_pago === 'online' ? 'Flow' : 'En tienda'} · ${PAGOS[p.estado_pago]}</span>
+          </div>
         </header>
         <div class="order__client">
           <span>${esc(p.cliente_nombre)}</span>
+          ${p.cliente_rut ? `<span class="order__rut">RUT ${esc(p.cliente_rut)}</span>` : ''}
           <a href="tel:${esc(p.cliente_telefono)}">${esc(p.cliente_telefono)}</a>
           ${p.cliente_email ? `<a href="mailto:${esc(p.cliente_email)}">${esc(p.cliente_email)}</a>` : ''}
         </div>

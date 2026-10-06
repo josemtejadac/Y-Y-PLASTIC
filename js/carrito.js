@@ -4,6 +4,32 @@
 (() => {
   const { sb, state, $, esc, toast, abrirModal, cerrarModal, urlFoto, error, precio, linkWhatsapp, storage } = window.YY;
   const KEY = 'yy_carrito';
+  const C = window.YY_CONFIG;
+
+  // RUT chileno: formato 12.345.678-9 y validación del dígito verificador
+  function rutLimpio(v) { return String(v || '').replace(/[^0-9kK]/g, '').toUpperCase(); }
+  function rutFormato(v) {
+    const r = rutLimpio(v);
+    if (r.length < 2) return r;
+    return `${r.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${r.slice(-1)}`;
+  }
+  function rutValido(v) {
+    const r = rutLimpio(v);
+    if (r.length < 8 || r.length > 9 || !/^\d+$/.test(r.slice(0, -1))) return false;
+    let suma = 0; let mult = 2;
+    for (let i = r.length - 2; i >= 0; i--) { suma += Number(r[i]) * mult; mult = mult === 7 ? 2 : mult + 1; }
+    const dv = 11 - (suma % 11);
+    return r.slice(-1) === (dv === 11 ? '0' : dv === 10 ? 'K' : String(dv));
+  }
+
+  async function irAPagar(codigo) {
+    const r = await fetch(`${C.flowUrl}/crear`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo iniciar el pago con Flow');
+    location.href = d.url;
+  }
 
   let items = [];
   try { items = JSON.parse(storage.get(KEY) || '[]'); } catch { items = []; }
@@ -130,15 +156,18 @@
             ${c.retiro_instrucciones ? `<small>${esc(c.retiro_instrucciones)}</small>` : ''}
           </div>
           <div class="form__row">
-            <label>Nombre *<input name="nombre" required autocomplete="name" value="${esc(storage.get('yy_cli_nombre') || '')}"></label>
-            <label>Teléfono / WhatsApp *<input name="telefono" required type="tel" autocomplete="tel" placeholder="+56 9 ..." value="${esc(storage.get('yy_cli_tel') || '')}"></label>
+            <label>Nombre y apellido *<input name="nombre" required autocomplete="name" placeholder="Ej: Juan Pérez" value="${esc(storage.get('yy_cli_nombre') || '')}"></label>
+            <label>RUT *<input name="rut" required placeholder="12.345.678-9" maxlength="12" value="${esc(storage.get('yy_cli_rut') || '')}"></label>
           </div>
-          <label>Correo (opcional)<input name="email" type="email" autocomplete="email"></label>
+          <div class="form__row">
+            <label>Correo *<input name="email" required type="email" autocomplete="email" placeholder="tucorreo@ejemplo.cl" value="${esc(storage.get('yy_cli_email') || '')}"></label>
+            <label>Teléfono *<input name="telefono" required type="tel" autocomplete="tel" placeholder="+56 9 1234 5678" value="${esc(storage.get('yy_cli_tel') || '')}"></label>
+          </div>
           <label>Comentarios (opcional)<textarea name="notas" rows="2" placeholder="Ej: retiro el sábado en la mañana"></textarea></label>
           <fieldset class="paymethods">
             <legend>Forma de pago</legend>
-            <label class="check"><input type="radio" name="pago" value="en_tienda" checked> Pago al retirar en tienda</label>
-            ${pagoOnline ? '<label class="check"><input type="radio" name="pago" value="online"> Pagar online ahora</label>' : ''}
+            ${pagoOnline ? '<label class="check"><input type="radio" name="pago" value="online" checked> Pagar online con Flow <small>(tarjetas, débito o transferencia)</small></label>' : ''}
+            <label class="check"><input type="radio" name="pago" value="en_tienda"${pagoOnline ? '' : ' checked'}> Pago al retirar en tienda</label>
           </fieldset>
           <div class="form__actions">
             <button type="button" class="btn btn--ghost" data-vaciar>Vaciar</button>
@@ -164,6 +193,7 @@
       it.cantidad = Math.max(1, parseInt(e.target.value, 10) || 1);
       guardar(); verCarrito();
     });
+    body.querySelector('#fPedido [name=rut]')?.addEventListener('blur', (e) => { e.target.value = rutFormato(e.target.value); });
     body.querySelector('[data-vaciar]')?.addEventListener('click', () => {
       if (!confirm('¿Vaciar el carrito?')) return;
       items = []; guardar(); verCarrito();
@@ -172,12 +202,16 @@
     body.querySelector('#fPedido')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.target;
+      if (!/\S+\s+\S+/.test(f.nombre.value.trim())) { f.nombre.focus(); return toast('Ingresa nombre y apellido', 'error'); }
+      if (!rutValido(f.rut.value)) { f.rut.focus(); return toast('El RUT no es válido', 'error'); }
       const btn = e.submitter; btn.disabled = true;
       try {
         storage.set('yy_cli_nombre', f.nombre.value.trim());
+        storage.set('yy_cli_rut', rutFormato(f.rut.value));
+        storage.set('yy_cli_email', f.email.value.trim());
         storage.set('yy_cli_tel', f.telefono.value.trim());
         const { data, error: err } = await sb.rpc('yyplastic_crear_pedido', {
-          p_cliente: { nombre: f.nombre.value, telefono: f.telefono.value, email: f.email.value, notas: f.notas.value },
+          p_cliente: { nombre: f.nombre.value, rut: f.rut.value, telefono: f.telefono.value, email: f.email.value, notas: f.notas.value },
           p_items: items.map((i) => ({ producto_id: i.id, cantidad: i.cantidad })),
           p_metodo_pago: f.pago.value,
         });
@@ -185,8 +219,9 @@
         const resumen = items.map((i) => `• ${i.cantidad} × ${i.nombre}`).join('\n');
         items = []; guardar();
         if (f.pago.value === 'online') {
-          // Aquí se conectará la pasarela de pago (crear transacción y redirigir).
-          toast('Pedido creado. El pago online se habilitará pronto.');
+          btn.textContent = 'Conectando con Flow…';
+          try { return await irAPagar(data.codigo); }
+          catch (err) { error(err); } // si falla, el pedido queda creado y puede pagarlo desde el seguimiento
         }
         confirmacion(data, f.nombre.value.trim(), resumen);
       } catch (err) { error(err); btn.disabled = false; }
@@ -221,16 +256,29 @@
       if (!data) return toast('No encontramos ese pedido', 'error');
       const pasos = ['nuevo', 'confirmado', 'preparando', 'listo', 'entregado'];
       const idx = pasos.indexOf(data.estado);
+      const vuelta = new URLSearchParams(location.search).get('pago');
+      const aviso = vuelta === 'pagado' ? '<p class="pay-banner pay-banner--ok">¡Pago recibido! Tu pedido está confirmado.</p>'
+        : vuelta === 'fallido' ? '<p class="pay-banner pay-banner--error">El pago no se completó. Puedes intentarlo de nuevo.</p>'
+        : vuelta === 'pendiente' ? '<p class="pay-banner">Tu pago está en proceso; Flow lo confirmará en unos minutos.</p>' : '';
+      if (vuelta === 'pagado') { items = []; guardar(); }
       abrirModal(`
         <div class="track">
+          ${aviso}
           <h2>Pedido #${data.folio}</h2>
           <p class="form__hint">${esc(data.cliente_nombre)} · ${new Date(data.creado_en).toLocaleString('es-CL')}</p>
           ${data.estado === 'cancelado' ? '<p class="status status--cancelado">Pedido cancelado</p>' : `
           <ol class="steps">${pasos.map((s, i) => `<li class="${i <= idx ? 'is-done' : ''}">${ESTADOS[s]}</li>`).join('')}</ol>`}
           <ul class="track__items">${data.items.map((i) => `<li><span>${i.cantidad} × ${esc(i.nombre)}</span><span>${precio(i.subtotal)}</span></li>`).join('')}</ul>
           <div class="cart__total"><span>Total</span><strong>${precio(data.total)}</strong></div>
-          <p class="form__hint">Pago: ${data.metodo_pago === 'online' ? 'online' : 'al retirar en tienda'} · ${PAGOS[data.estado_pago]}</p>
+          <p class="form__hint">Pago: ${data.metodo_pago === 'online' ? 'online con Flow' : 'al retirar en tienda'} · <strong class="pay pay--${data.estado_pago}">${PAGOS[data.estado_pago]}</strong></p>
+          ${data.metodo_pago === 'online' && ['pendiente', 'fallido'].includes(data.estado_pago) && data.estado !== 'cancelado'
+            ? '<button class="btn" id="btnPagar" type="button">Pagar ahora con Flow</button>' : ''}
+          <p class="form__hint">Retiro en tienda. ${esc(state.config.retiro_instrucciones || '')}</p>
         </div>`);
+      document.querySelector('#btnPagar')?.addEventListener('click', async (e) => {
+        e.target.disabled = true; e.target.textContent = 'Conectando con Flow…';
+        try { await irAPagar(codigo); } catch (err) { error(err); e.target.disabled = false; e.target.textContent = 'Pagar ahora con Flow'; }
+      });
     } catch (e) { error(e); }
   }
 

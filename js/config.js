@@ -5,6 +5,7 @@ window.YY_CONFIG = {
   supabaseUrl: 'https://wiuuzsiiaagqldtxfouj.supabase.co',
   supabaseKey: 'sb_publishable_BtphNzcv_YrDNwRul86J0g_DiCGznE1',
   bucket: 'yyplastic-fotos',
+  flowUrl: 'https://wiuuzsiiaagqldtxfouj.supabase.co/functions/v1/yyplastic-flow',
   moneda: 'CLP',
   locale: 'es-CL',
   porPagina: 24,

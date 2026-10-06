@@ -21,7 +21,7 @@ create table if not exists public.yyplastic_config (
 );
 insert into public.yyplastic_config (clave, valor) values
   ('nombre', 'Y&Y Plastic'),
-  ('eslogan', 'Soluciones prácticas para tu cocina.'),
+  ('eslogan', 'Tu aliado en envases para restaurantes, foodtrucks y delivery.'),
   ('descripcion', 'Distribuidora de envases, desechables y artículos plásticos. Venta al detalle y al mayor.'),
   ('whatsapp', ''),
   ('telefono', ''),
