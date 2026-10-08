@@ -27,7 +27,10 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.url) throw new Error(d.error || 'No se pudo iniciar el pago con Flow');
+    if (!r.ok || !d.url) {
+      const msg = /email/i.test(d.error || '') ? 'Flow no aceptó ese correo. Revisa que esté bien escrito.' : (d.error || 'No se pudo iniciar el pago con Flow');
+      throw new Error(msg);
+    }
     location.href = d.url;
   }
 
@@ -52,7 +55,7 @@
   }
 
   const snapshot = (p) => ({
-    id: p.id, nombre: p.nombre, unidad: p.unidad, codigo: p.codigo,
+    id: p.id, nombre: p.nombre, unidad: p.unidad, unidad_mayor: p.unidad_mayor, codigo: p.codigo,
     precio_detalle: p.precio_detalle, precio_mayor: p.precio_mayor, minimo_mayor: p.minimo_mayor,
     foto: p.fotos?.[0] || '',
   });
@@ -133,7 +136,7 @@
               <div class="cart__img">${i.foto ? `<img src="${esc(urlFoto(i.foto))}" alt="">` : '<img src="assets/isotipo.svg" alt="" class="cart__ph">'}</div>
               <div class="cart__info">
                 <strong>${esc(i.nombre)}</strong>
-                ${i.unidad ? `<small>${esc(i.unidad)}</small>` : ''}
+                ${(i.tipo === 'mayor' && i.unidad_mayor) || i.unidad ? `<small>${esc(i.tipo === 'mayor' && i.unidad_mayor ? i.unidad_mayor : i.unidad)}</small>` : ''}
                 <small class="cart__tipo cart__tipo--${i.tipo}">${i.unit === null ? 'Sin precio' : `${precio(i.unit)} c/u · ${i.tipo === 'mayor' ? 'al mayor' : 'al detalle'}`}</small>
               </div>
               <div class="qty qty--small">

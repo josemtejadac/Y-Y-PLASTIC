@@ -222,6 +222,11 @@
 
   const nombreCategoria = (id) => state.categorias.find((c) => c.id === id)?.nombre || '';
 
+  // Presentación y descripción según el modo; si el mayor no tiene las suyas, se usan las del detalle
+  const esMayor = (p) => state.modo === 'mayor' && p.precio_mayor !== null && p.precio_mayor !== undefined;
+  const unidadDe = (p) => (esMayor(p) && p.unidad_mayor ? p.unidad_mayor : p.unidad);
+  const descripcionDe = (p) => (esMayor(p) && p.descripcion_mayor ? p.descripcion_mayor : p.descripcion);
+
   function tarjeta(p) {
     const foto = p.fotos?.[0];
     return `<article class="card${p.activo === false ? ' is-inactive' : ''}" data-id="${p.id}" tabindex="0">
@@ -233,8 +238,9 @@
       <div class="card__body">
         <span class="card__cat">${esc(nombreCategoria(p.categoria_id))}</span>
         <h3 class="card__name">${esc(p.nombre)}</h3>
-        ${p.unidad ? `<span class="card__unit">${esc(p.unidad)}</span>` : ''}
+        ${unidadDe(p) ? `<span class="card__unit">${esc(unidadDe(p))}</span>` : ''}
         ${bloquePrecio(p)}
+        <span class="card__stock admin-only${(p.stock || 0) > 0 ? '' : ' card__stock--cero'}">Stock: ${p.stock ?? 0}</span>
         ${p.precio_detalle !== null || p.precio_mayor !== null
           ? `<button class="btn btn--small card__add" data-accion="agregar" aria-label="Agregar ${esc(p.nombre)} al carrito">Agregar</button>` : ''}
       </div>
@@ -288,17 +294,18 @@
           <span class="card__cat">${esc(nombreCategoria(p.categoria_id))}</span>
           <h2>${esc(p.nombre)}</h2>
           ${p.codigo ? `<p class="product__code">Código: ${esc(p.codigo)}</p>` : ''}
-          ${p.unidad ? `<p class="product__unit">${esc(p.unidad)}</p>` : ''}
           <div class="product__prices">
-            <div class="pbox${state.modo === 'detalle' ? ' is-active' : ''}">
+            <button type="button" class="pbox${!esMayor(p) ? ' is-active' : ''}" data-modo="detalle">
               <span>Al detalle</span><strong>${det || 'Consultar'}</strong>
-            </div>
-            <div class="pbox${state.modo === 'mayor' ? ' is-active' : ''}">
-              <span>Al mayor</span><strong>${may || 'Consultar'}</strong>
-              ${p.minimo_mayor ? `<small>desde ${p.minimo_mayor} unidades</small>` : ''}
-            </div>
+              ${p.unidad ? `<small>${esc(p.unidad)}</small>` : ''}
+            </button>
+            <button type="button" class="pbox${esMayor(p) ? ' is-active' : ''}" data-modo="mayor"${may ? '' : ' disabled'}>
+              <span>Al mayor</span><strong>${may || 'No disponible'}</strong>
+              ${may && p.minimo_mayor ? `<small class="pbox__min">desde ${p.minimo_mayor} unidades</small>` : ''}
+              ${may && (p.unidad_mayor || p.unidad) ? `<small>${esc(p.unidad_mayor || p.unidad)}</small>` : ''}
+            </button>
           </div>
-          ${p.descripcion ? `<p class="product__desc">${esc(p.descripcion).replace(/\n/g, '<br>')}</p>` : ''}
+          ${descripcionDe(p) ? `<p class="product__desc">${esc(descripcionDe(p)).replace(/\n/g, '<br>')}</p>` : ''}
           <div id="pvCarrito"></div>
           ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">Consultar por WhatsApp</a>` : ''}
           <button class="btn btn--small admin-only" id="pvEditar">Editar producto</button>
@@ -311,6 +318,12 @@
       body.querySelectorAll('.product__thumbs button').forEach((x) => x.classList.toggle('is-active', x === b));
     });
     body.querySelector('#pvEditar')?.addEventListener('click', () => window.YYAdmin?.editarProducto(p));
+    body.querySelector('.product__prices')?.addEventListener('click', (e) => {
+      const m = e.target.closest('.pbox')?.dataset.modo;
+      if (!m || m === state.modo) return;
+      setModo(m);
+      verProducto(p);
+    });
     window.YYCarrito?.montarEnFicha(body.querySelector('#pvCarrito'), p);
   }
 

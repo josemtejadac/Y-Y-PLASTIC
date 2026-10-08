@@ -106,10 +106,11 @@
   // ---------- Productos ----------
   function editarProducto(p) {
     const nuevo = !p;
-    p = p || { nombre: '', descripcion: '', categoria_id: null, codigo: '', unidad: '', precio_detalle: null, precio_mayor: null, minimo_mayor: null, fotos: [], destacado: false, activo: true, orden: 0 };
+    p = p || { nombre: '', descripcion: '', descripcion_mayor: '', categoria_id: null, codigo: '', unidad: '', unidad_mayor: '', stock: 0, precio_detalle: null, precio_mayor: null, minimo_mayor: null, fotos: [], destacado: false, activo: true, orden: 0 };
     let fotos = [...(p.fotos || [])];
-    const opcionesCat = ['<option value="">Sin categoría</option>']
-      .concat(state.categorias.map((c) => `<option value="${c.id}"${c.id === p.categoria_id ? ' selected' : ''}>${esc(c.nombre)}</option>`)).join('');
+    const opcionesDeCategorias = (sel) => '<option value="">Sin categoría</option>'
+      + state.categorias.map((c) => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')
+      + '<option value="__nueva">+ Crear categoría nueva…</option>';
     const v = (x) => (x === null || x === undefined ? '' : esc(x));
 
     const body = abrirModal(`
@@ -117,30 +118,85 @@
         <h2>${nuevo ? 'Nuevo producto' : 'Editar producto'}</h2>
         <label>Nombre *<input name="nombre" required value="${v(p.nombre)}"></label>
         <div class="form__row">
-          <label>Categoría<select name="categoria_id">${opcionesCat}</select></label>
+          <label>Categoría<select name="categoria_id">${opcionesDeCategorias(p.categoria_id)}</select></label>
           <label>Código / SKU<input name="codigo" value="${v(p.codigo)}"></label>
         </div>
-        <label>Presentación / unidad<input name="unidad" placeholder="Ej: Paquete x 50 unidades" value="${v(p.unidad)}"></label>
-        <div class="form__row form__row--3">
-          <label>Precio al detalle<input name="precio_detalle" type="number" min="0" step="any" inputmode="decimal" value="${v(p.precio_detalle)}"></label>
-          <label>Precio al mayor<input name="precio_mayor" type="number" min="0" step="any" inputmode="decimal" value="${v(p.precio_mayor)}"></label>
-          <label>Mínimo al mayor<input name="minimo_mayor" type="number" min="1" step="1" placeholder="Ej: 12" value="${v(p.minimo_mayor)}"></label>
+        <div class="newcat" id="newCat" hidden>
+          <input id="newCatName" placeholder="Nombre de la nueva categoría (ej: Bandejas)" maxlength="60">
+          <button type="button" class="btn btn--small" id="newCatAdd">Crear</button>
+          <button type="button" class="btn btn--small btn--ghost" id="newCatCancel">Cancelar</button>
         </div>
-        <label>Descripción<textarea name="descripcion" rows="4">${v(p.descripcion)}</textarea></label>
+
+        <fieldset class="pricebox pricebox--detalle">
+          <legend>Al detalle</legend>
+          <label>Precio<input name="precio_detalle" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 1500" value="${v(p.precio_detalle)}"></label>
+          <label>Presentación<input name="unidad" placeholder="Ej: Paquete x 50 unidades · 15cm x 8cm" value="${v(p.unidad)}"></label>
+          <label>Descripción<textarea name="descripcion" rows="3" placeholder="Lo que verá el cliente que compra al detalle">${v(p.descripcion)}</textarea></label>
+        </fieldset>
+
+        <fieldset class="pricebox pricebox--mayor">
+          <legend>Al mayor</legend>
+          <div class="form__row">
+            <label>Precio<input name="precio_mayor" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 1200" value="${v(p.precio_mayor)}"></label>
+            <label>Se cobra desde (cantidad)<input name="minimo_mayor" type="number" min="1" step="1" placeholder="Ej: 12" value="${v(p.minimo_mayor)}"></label>
+          </div>
+          <label>Presentación<input name="unidad_mayor" placeholder="Ej: Caja x 800 unidades · 15cm x 8cm" value="${v(p.unidad_mayor)}"></label>
+          <label>Descripción<textarea name="descripcion_mayor" rows="3" placeholder="Lo que verá el cliente que compra al mayor">${v(p.descripcion_mayor)}</textarea></label>
+          <small class="pricebox__hint">Si dejas el precio al mayor vacío, el producto solo se vende al detalle.</small>
+        </fieldset>
         <div class="form__field">
           <span class="form__label">Fotos <small>(se comprimen automáticamente; la primera es la principal)</small></span>
           <div class="photos" id="fotos"></div>
         </div>
-        <div class="form__row form__row--3 form__checks">
+        <div class="form__row">
+          <label>Stock (unidades disponibles)<input name="stock" type="number" min="0" step="1" inputmode="numeric" value="${v(p.stock ?? 0)}"></label>
+          <label>Orden en el catálogo<input name="orden" type="number" step="1" value="${v(p.orden)}"></label>
+        </div>
+        <div class="form__row form__checks">
           <label class="check"><input type="checkbox" name="destacado"${p.destacado ? ' checked' : ''}> Destacado</label>
           <label class="check"><input type="checkbox" name="activo"${p.activo ? ' checked' : ''}> Visible en la web</label>
-          <label>Orden<input name="orden" type="number" step="1" value="${v(p.orden)}"></label>
         </div>
         <div class="form__actions">
           ${nuevo ? '' : '<button type="button" class="btn btn--danger btn--ghost" id="btnDel">Eliminar</button>'}
           <button type="submit" class="btn">Guardar</button>
         </div>
       </form>`, 'modal--wide');
+
+    // ---- Crear una categoría sin salir del formulario ----
+    const selCat = body.querySelector('select[name=categoria_id]');
+    const boxCat = body.querySelector('#newCat');
+    const inpCat = body.querySelector('#newCatName');
+    let catPrevia = selCat.value;
+    selCat.addEventListener('change', () => {
+      if (selCat.value === '__nueva') { boxCat.hidden = false; inpCat.focus(); }
+      else { catPrevia = selCat.value; boxCat.hidden = true; }
+    });
+    const cancelarCat = () => { boxCat.hidden = true; inpCat.value = ''; selCat.value = catPrevia; };
+    async function crearCategoria() {
+      const nombre = inpCat.value.trim();
+      if (!nombre) { inpCat.focus(); return; }
+      const btn = body.querySelector('#newCatAdd'); btn.disabled = true;
+      try {
+        const id = await rpc('yyplastic_guardar_categoria', { p_id: null, p_nombre: nombre, p_orden: state.categorias.length + 1 });
+        await window.YY.recargarTodo();
+        selCat.innerHTML = opcionesDeCategorias(id);
+        catPrevia = String(id); boxCat.hidden = true; inpCat.value = '';
+        toast(`Categoría "${nombre}" creada`);
+      } catch (err) { error(err); } finally { btn.disabled = false; }
+    }
+    body.querySelector('#newCatAdd').addEventListener('click', crearCategoria);
+    body.querySelector('#newCatCancel').addEventListener('click', cancelarCat);
+    inpCat.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); crearCategoria(); }
+      if (e.key === 'Escape') { e.stopPropagation(); cancelarCat(); }
+    });
+
+    // Con precio al mayor es obligatorio decir desde qué cantidad se cobra
+    const fPrecioMayor = body.querySelector('[name=precio_mayor]');
+    const fMinimo = body.querySelector('[name=minimo_mayor]');
+    const syncMinimo = () => { fMinimo.required = fPrecioMayor.value !== ''; };
+    fPrecioMayor.addEventListener('input', syncMinimo);
+    syncMinimo();
 
     const cont = body.querySelector('#fotos');
     function pintarFotos() {
@@ -179,6 +235,7 @@
     body.querySelector('#fProd').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.target;
+      if (f.categoria_id.value === '__nueva') { toast('Escribe el nombre de la categoría y pulsa "Crear", o elige otra', 'error'); inpCat.focus(); return; }
       const btn = e.submitter; btn.disabled = true;
       try {
         await rpc('yyplastic_guardar_producto', {
@@ -188,10 +245,13 @@
             categoria_id: f.categoria_id.value,
             codigo: f.codigo.value.trim(),
             unidad: f.unidad.value.trim(),
+            unidad_mayor: f.unidad_mayor.value.trim(),
             precio_detalle: f.precio_detalle.value,
             precio_mayor: f.precio_mayor.value,
             minimo_mayor: f.minimo_mayor.value,
+            stock: f.stock.value || 0,
             descripcion: f.descripcion.value.trim(),
+            descripcion_mayor: f.descripcion_mayor.value.trim(),
             fotos,
             destacado: f.destacado.checked,
             activo: f.activo.checked,

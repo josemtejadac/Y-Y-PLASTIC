@@ -115,3 +115,22 @@
 .pay-chip--pagado { background: rgba(68, 165, 127, .15); color: var(--verde-osc); }
 .pay-chip--fallido { background: rgba(214, 69, 69, .1); color: var(--rojo); }
 .order__pay { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* ===== Formulario de producto: detalle y mayor separados ===== */
+.pricebox { margin: 0; padding: 14px 16px 16px; border: 1.5px solid var(--linea); border-radius: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pricebox legend { padding: 0 8px; font-weight: 800; font-size: .9rem; }
+.pricebox--detalle { border-color: rgba(68, 165, 127, .55); background: rgba(68, 165, 127, .05); }
+.pricebox--detalle legend { color: var(--verde-osc); }
+.pricebox--mayor { border-color: rgba(13, 201, 178, .6); background: rgba(13, 201, 178, .06); }
+.pricebox--mayor legend { color: #0a9c8a; }
+.pricebox__hint { color: var(--muted); }
+.newcat { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: rgba(68, 165, 127, .1); }
+.newcat[hidden] { display: none; }
+.newcat input { flex: 1 1 200px; width: auto !important; }
+.pbox { text-align: left; font: inherit; color: inherit; background: #fff; cursor: pointer; }
+.pbox:disabled { cursor: default; opacity: .55; }
+.pbox small { font-weight: 500; color: var(--muted); }
+.pbox .pbox__min { font-weight: 700; color: var(--verde-osc); }
+
+.card__stock { display: none; margin-top: 6px; font-size: .78rem; font-weight: 700; color: var(--verde-osc); }
+.card__stock--cero { color: var(--rojo); }

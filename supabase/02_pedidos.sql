@@ -24,3 +24,21 @@
 --  2. Webhook del proveedor -> actualiza estado_pago/pago_referencia usando la
 --     service_role key (nunca desde el navegador).
 --  3. Poner pago_online_activo = 'si' para mostrar la opción en el carrito.
+
+-- =====================================================================
+-- ACTUALIZACIÓN (migraciones yyplastic_12 a 16)
+-- =====================================================================
+--  * Pago con Flow ACTIVO (config pago_online_activo = 'si'). Las claves viven cifradas
+--    en el vault de Supabase (yyplastic_flow_api_key / yyplastic_flow_secret_key), nunca en la web ni en GitHub.
+--  * Edge Function "yyplastic-flow" (sin JWT; valida con Flow):
+--      POST /crear      -> crea el cobro en Flow y devuelve la URL de pago
+--      POST /confirmar  -> Flow avisa servidor a servidor; se consulta a Flow y se registra
+--      POST /retorno    -> el cliente vuelve de Flow; se registra y redirige a
+--                          https://y-y-plastic.pages.dev/?pedido=<codigo>&pago=<estado>
+--    Dominios permitidos (CORS/retorno): ver SITIOS en la función.
+--  * Funciones solo para el servidor (service_role): yyplastic_flow_credenciales, yyplastic_pedido_para_pago,
+--    yyplastic_pedido_guardar_token, yyplastic_pago_registrar (verifica que el monto pagado = total del pedido).
+--  * Pedidos: cliente_rut (validado con módulo 11), pago_token, pago_medio.
+--  * Productos: unidad_mayor y descripcion_mayor (presentación/descripción propias del precio al mayor)
+--    y stock (int >= 0, por ahora solo informativo).
+--  * El pedido guarda la presentación que corresponde al precio cobrado (detalle o mayor).
