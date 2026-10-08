@@ -42,3 +42,25 @@
 --  * Productos: unidad_mayor y descripcion_mayor (presentación/descripción propias del precio al mayor)
 --    y stock (int >= 0, por ahora solo informativo).
 --  * El pedido guarda la presentación que corresponde al precio cobrado (detalle o mayor).
+
+-- =====================================================================
+-- STOCK, CAJAS Y PAGO SOLO CON FLOW (migraciones yyplastic_17 y 18)
+-- =====================================================================
+--  * El pago es siempre con Flow (retiro en tienda). yyplastic_crear_pedido rechaza cualquier otro método.
+--  * Stock en UNIDADES (las del detalle). productos.unidades_por_caja: cuántas unidades trae una caja.
+--      - Al detalle se compra por unidad; al mayor por CAJA (1 caja = unidades_por_caja unidades de stock).
+--      - minimo_mayor = mínimo de cajas; precio_mayor = precio por caja.
+--  * Cada línea del pedido: {producto_id, tipo: 'detalle'|'mayor', cantidad}. El servidor valida el stock y lo
+--    descuenta en el mismo momento (sin sobreventa). pedido_items.unidades guarda lo descontado.
+--  * El stock vuelve si el dueño cancela el pedido (yyplastic_actualizar_pedido) y se descuenta de nuevo si lo reactiva.
+--  * pg_cron 'yyplastic-liberar-pedidos' (cada 10 min): pedidos online sin pagar tras 60 min se cancelan y devuelven el stock.
+--  * Si Flow confirma un pago de un pedido ya cancelado por tiempo, se reactiva y se vuelve a reservar el stock.
+--  * El formulario del producto solo envía "stock" si el dueño lo cambió (no pisa ventas hechas mientras editaba).
+--  * Ayudantes internos en el esquema private (no expuesto a la web): devolver_stock, reservar_stock, liberar_pedidos_vencidos.
+--  * pedidos.eliminado: los pedidos "eliminados" no salen en el panel ni en el seguimiento (el conector no permite DELETE).
+--
+-- Para borrar DEFINITIVAMENTE los pedidos y productos de prueba (ejecutar en el SQL Editor) y reiniciar el folio:
+--   delete from public.yyplastic_pedido_items where pedido_id in (select id from public.yyplastic_pedidos where eliminado);
+--   delete from public.yyplastic_pedidos where eliminado;
+--   delete from public.yyplastic_productos where eliminado and nombre like 'TEST%';
+--   select setval('public.yyplastic_pedido_folio_seq', 1000, true);

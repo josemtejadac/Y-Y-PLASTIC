@@ -211,19 +211,26 @@
     if (state.modo === 'mayor') {
       if (may) {
         return `<div class="price"><span class="price__main">${may}</span>
-          ${p.minimo_mayor ? `<span class="price__sub">desde ${p.minimo_mayor} ${compacto ? 'un.' : 'unidades'}</span>` : ''}
+          <span class="price__sub">${textoCaja(p)}</span>
           ${det && !compacto ? `<span class="price__alt">Detalle: ${det}</span>` : ''}</div>`;
       }
       return `<div class="price"><span class="price__main price__main--muted">${det || 'Consultar'}</span><span class="price__sub">sin precio mayorista</span></div>`;
     }
     return `<div class="price"><span class="price__main">${det || 'Consultar'}</span>
-      ${may && !compacto ? `<span class="price__alt">Al mayor: ${may}${p.minimo_mayor ? ` (desde ${p.minimo_mayor} un.)` : ''}</span>` : ''}</div>`;
+      ${may && !compacto ? `<span class="price__alt">Al mayor: ${may} ${textoCaja(p)}</span>` : ''}</div>`;
   }
 
   const nombreCategoria = (id) => state.categorias.find((c) => c.id === id)?.nombre || '';
 
   // Presentación y descripción según el modo; si el mayor no tiene las suyas, se usan las del detalle
   const esMayor = (p) => state.modo === 'mayor' && p.precio_mayor !== null && p.precio_mayor !== undefined;
+  // Stock en unidades (las del detalle). Al mayor se compra por caja: 1 caja = unidades_por_caja unidades.
+  const upc = (p) => Math.max(1, p.unidades_por_caja || 1);
+  const minCajas = (p) => Math.max(1, p.minimo_mayor || 1);
+  const stockDe = (p) => Math.max(0, p.stock || 0);
+  const cajasDisp = (p) => Math.floor(stockDe(p) / upc(p));
+  const sinStock = (p) => (esMayor(p) ? cajasDisp(p) < minCajas(p) : stockDe(p) < 1);
+  const textoCaja = (p) => `por caja${upc(p) > 1 ? ` de ${upc(p)} un.` : ''}${minCajas(p) > 1 ? ` · mín. ${minCajas(p)} cajas` : ''}`;
   const unidadDe = (p) => (esMayor(p) && p.unidad_mayor ? p.unidad_mayor : p.unidad);
   const descripcionDe = (p) => (esMayor(p) && p.descripcion_mayor ? p.descripcion_mayor : p.descripcion);
 
@@ -234,15 +241,18 @@
         ${foto ? `<img src="${esc(urlFoto(foto))}" alt="${esc(p.nombre)}" loading="lazy">` : `<img src="assets/isotipo.svg" alt="" class="card__placeholder">`}
         ${p.destacado ? '<span class="badge">Destacado</span>' : ''}
         ${p.activo === false ? '<span class="badge badge--dark">Oculto</span>' : ''}
+        ${sinStock(p) ? '<span class="badge badge--stock">Sin stock</span>' : ''}
       </div>
       <div class="card__body">
         <span class="card__cat">${esc(nombreCategoria(p.categoria_id))}</span>
         <h3 class="card__name">${esc(p.nombre)}</h3>
         ${unidadDe(p) ? `<span class="card__unit">${esc(unidadDe(p))}</span>` : ''}
         ${bloquePrecio(p)}
-        <span class="card__stock admin-only${(p.stock || 0) > 0 ? '' : ' card__stock--cero'}">Stock: ${p.stock ?? 0}</span>
-        ${p.precio_detalle !== null || p.precio_mayor !== null
-          ? `<button class="btn btn--small card__add" data-accion="agregar" aria-label="Agregar ${esc(p.nombre)} al carrito">Agregar</button>` : ''}
+        <span class="card__stock admin-only${stockDe(p) > 0 ? '' : ' card__stock--cero'}">Stock: ${stockDe(p)} un.${upc(p) > 1 ? ` (${Math.floor(stockDe(p) / upc(p))} cajas de ${upc(p)})` : ''}</span>
+        ${(esMayor(p) ? p.precio_mayor : p.precio_detalle) !== null && (esMayor(p) ? p.precio_mayor : p.precio_detalle) !== undefined
+          ? (sinStock(p)
+            ? '<button class="btn btn--small card__add" type="button" disabled>Sin stock</button>'
+            : `<button class="btn btn--small card__add" data-accion="agregar" aria-label="Agregar ${esc(p.nombre)} al carrito">Agregar</button>`) : ''}
       </div>
       <div class="card__admin admin-only">
         <button class="btn btn--small" data-accion="editar">Editar</button>
@@ -271,7 +281,7 @@
     if (accion === 'nuevo') return window.YYAdmin?.editarProducto(null);
     if (accion === 'editar') return window.YYAdmin?.editarProducto(p);
     if (accion === 'eliminar') return window.YYAdmin?.eliminarProducto(p);
-    if (accion === 'agregar') return window.YYCarrito?.agregar(p, 1);
+    if (accion === 'agregar') return window.YYCarrito?.agregarRapido(p);
     if (p) verProducto(p);
   });
   $('#grid').addEventListener('keydown', (e) => {
@@ -301,7 +311,7 @@
             </button>
             <button type="button" class="pbox${esMayor(p) ? ' is-active' : ''}" data-modo="mayor"${may ? '' : ' disabled'}>
               <span>Al mayor</span><strong>${may || 'No disponible'}</strong>
-              ${may && p.minimo_mayor ? `<small class="pbox__min">desde ${p.minimo_mayor} unidades</small>` : ''}
+              ${may ? `<small class="pbox__min">${textoCaja(p)}</small>` : ''}
               ${may && (p.unidad_mayor || p.unidad) ? `<small>${esc(p.unidad_mayor || p.unidad)}</small>` : ''}
             </button>
           </div>
@@ -372,6 +382,7 @@
   // API compartida con admin.js
   window.YY = {
     sb, state, $, $$, esc, toast, abrirModal, cerrarModal, urlFoto, error, nombreCategoria, precio, fmt, linkWhatsapp, storage,
+    esMayor, upc, minCajas, stockDe, cajasDisp, sinStock,
     async recargarTodo() {
       if (state.admin) state.admin.productos = null;
       await Promise.all([cargarConfig(), cargarCategorias(), cargarSlides()]);

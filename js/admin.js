@@ -106,7 +106,7 @@
   // ---------- Productos ----------
   function editarProducto(p) {
     const nuevo = !p;
-    p = p || { nombre: '', descripcion: '', descripcion_mayor: '', categoria_id: null, codigo: '', unidad: '', unidad_mayor: '', stock: 0, precio_detalle: null, precio_mayor: null, minimo_mayor: null, fotos: [], destacado: false, activo: true, orden: 0 };
+    p = p || { nombre: '', descripcion: '', descripcion_mayor: '', categoria_id: null, codigo: '', unidad: '', unidad_mayor: '', unidades_por_caja: 1, stock: 0, precio_detalle: null, precio_mayor: null, minimo_mayor: null, fotos: [], destacado: false, activo: true, orden: 0 };
     let fotos = [...(p.fotos || [])];
     const opcionesDeCategorias = (sel) => '<option value="">Sin categoría</option>'
       + state.categorias.map((c) => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')
@@ -129,27 +129,28 @@
 
         <fieldset class="pricebox pricebox--detalle">
           <legend>Al detalle</legend>
-          <label>Precio<input name="precio_detalle" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 1500" value="${v(p.precio_detalle)}"></label>
+          <label>Precio por unidad<input name="precio_detalle" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 1500" value="${v(p.precio_detalle)}"></label>
           <label>Presentación<input name="unidad" placeholder="Ej: Paquete x 50 unidades · 15cm x 8cm" value="${v(p.unidad)}"></label>
           <label>Descripción<textarea name="descripcion" rows="3" placeholder="Lo que verá el cliente que compra al detalle">${v(p.descripcion)}</textarea></label>
         </fieldset>
 
         <fieldset class="pricebox pricebox--mayor">
           <legend>Al mayor</legend>
-          <div class="form__row">
-            <label>Precio<input name="precio_mayor" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 1200" value="${v(p.precio_mayor)}"></label>
-            <label>Se cobra desde (cantidad)<input name="minimo_mayor" type="number" min="1" step="1" placeholder="Ej: 12" value="${v(p.minimo_mayor)}"></label>
+          <div class="form__row form__row--3">
+            <label>Precio por caja<input name="precio_mayor" type="number" min="0" step="any" inputmode="decimal" placeholder="Ej: 60000" value="${v(p.precio_mayor)}"></label>
+            <label>Unidades por caja<input name="unidades_por_caja" type="number" min="1" step="1" inputmode="numeric" placeholder="Ej: 100" value="${v(p.unidades_por_caja ?? 1)}"></label>
+            <label>Mínimo de cajas<input name="minimo_mayor" type="number" min="1" step="1" placeholder="Ej: 1" value="${v(p.minimo_mayor)}"></label>
           </div>
           <label>Presentación<input name="unidad_mayor" placeholder="Ej: Caja x 800 unidades · 15cm x 8cm" value="${v(p.unidad_mayor)}"></label>
           <label>Descripción<textarea name="descripcion_mayor" rows="3" placeholder="Lo que verá el cliente que compra al mayor">${v(p.descripcion_mayor)}</textarea></label>
-          <small class="pricebox__hint">Si dejas el precio al mayor vacío, el producto solo se vende al detalle.</small>
+          <small class="pricebox__hint">Al mayor se compra por caja. "Unidades por caja" es cuántas unidades del detalle trae una caja. Si dejas el precio vacío, solo se vende al detalle.</small>
         </fieldset>
         <div class="form__field">
           <span class="form__label">Fotos <small>(se comprimen automáticamente; la primera es la principal)</small></span>
           <div class="photos" id="fotos"></div>
         </div>
         <div class="form__row">
-          <label>Stock (unidades disponibles)<input name="stock" type="number" min="0" step="1" inputmode="numeric" value="${v(p.stock ?? 0)}"></label>
+          <label>Stock (en unidades)<input name="stock" type="number" min="0" step="1" inputmode="numeric" value="${v(p.stock ?? 0)}"><small class="stock-hint" id="stockHint"></small></label>
           <label>Orden en el catálogo<input name="orden" type="number" step="1" value="${v(p.orden)}"></label>
         </div>
         <div class="form__row form__checks">
@@ -197,6 +198,21 @@
     const syncMinimo = () => { fMinimo.required = fPrecioMayor.value !== ''; };
     fPrecioMayor.addEventListener('input', syncMinimo);
     syncMinimo();
+
+    // Stock siempre en unidades; abajo se ve cuántas cajas equivale (ej: 500 un. = 5 cajas de 100)
+    const fStock = body.querySelector('[name=stock]');
+    const fUpc = body.querySelector('[name=unidades_por_caja]');
+    const stockHint = body.querySelector('#stockHint');
+    const pintarStock = () => {
+      const n = parseInt(fStock.value, 10) || 0; const u = Math.max(1, parseInt(fUpc.value, 10) || 1);
+      stockHint.textContent = u > 1
+        ? `= ${Math.floor(n / u)} caja(s) de ${u}${n % u ? ` + ${n % u} suelta(s)` : ''}. Si tienes 5 cajas de 100, escribe 500.`
+        : 'Cuenta en unidades.';
+    };
+    fStock.addEventListener('input', pintarStock);
+    fUpc.addEventListener('input', pintarStock);
+    pintarStock();
+    const stockInicial = String(p.stock ?? 0);
 
     const cont = body.querySelector('#fotos');
     function pintarFotos() {
@@ -249,7 +265,9 @@
             precio_detalle: f.precio_detalle.value,
             precio_mayor: f.precio_mayor.value,
             minimo_mayor: f.minimo_mayor.value,
-            stock: f.stock.value || 0,
+            unidades_por_caja: f.unidades_por_caja.value || 1,
+            // el stock solo se envía si lo cambiaste (así no pisa las ventas que ocurrieron mientras editabas)
+            ...(nuevo || f.stock.value !== stockInicial ? { stock: f.stock.value || 0 } : {}),
             descripcion: f.descripcion.value.trim(),
             descripcion_mayor: f.descripcion_mayor.value.trim(),
             fotos,

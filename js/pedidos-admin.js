@@ -121,7 +121,7 @@
           ${p.cliente_email ? `<a href="mailto:${esc(p.cliente_email)}">${esc(p.cliente_email)}</a>` : ''}
         </div>
         <ul class="order__items">
-          ${p.items.map((i) => `<li><span>${i.cantidad} × ${esc(i.nombre)}${i.unidad ? ` <small>(${esc(i.unidad)})</small>` : ''}</span>
+          ${p.items.map((i) => `<li><span>${esc(window.YYCarrito.lineaTxt(i))}${i.unidad ? ` <small>(${esc(i.unidad)})</small>` : ''}${i.tipo_precio === 'mayor' && i.unidades > i.cantidad ? ` <small>· ${i.unidades} un.</small>` : ''}</span>
             <span><small>${i.tipo_precio === 'mayor' ? 'mayor' : 'detalle'}</small> ${precio(i.subtotal)}</span></li>`).join('')}
         </ul>
         ${p.notas ? `<p class="order__notes">“${esc(p.notas)}”</p>` : ''}

@@ -1,9 +1,10 @@
 // Y&Y Plastic — carrito y pedidos con retiro en tienda.
-// El precio final lo calcula Supabase (yyplastic_crear_pedido); aquí solo se muestra
-// la misma regla: precio al mayor automático al llegar a la cantidad mínima.
+// Cada línea del carrito es por UNIDAD (al detalle) o por CAJA (al mayor). El stock se cuenta en unidades:
+// 1 caja descuenta unidades_por_caja unidades. Precio y stock los valida Supabase (yyplastic_crear_pedido).
 (() => {
-  const { sb, state, $, esc, toast, abrirModal, cerrarModal, urlFoto, error, precio, linkWhatsapp, storage } = window.YY;
-  const KEY = 'yy_carrito';
+  const { sb, state, $, esc, toast, abrirModal, cerrarModal, urlFoto, error, precio, linkWhatsapp, storage,
+    esMayor, stockDe } = window.YY;
+  const KEY = 'yy_carrito2';
   const C = window.YY_CONFIG;
 
   // RUT chileno: formato 12.345.678-9 y validación del dígito verificador
@@ -46,49 +47,89 @@
     c.hidden = n === 0;
   }
 
-  function precioDe(p, cantidad) {
-    if (p.precio_mayor !== null && p.precio_mayor !== undefined && cantidad >= (p.minimo_mayor || 1)) {
-      return { tipo: 'mayor', unit: Number(p.precio_mayor) };
-    }
-    if (p.precio_detalle === null || p.precio_detalle === undefined) return { tipo: 'detalle', unit: null };
-    return { tipo: 'detalle', unit: Number(p.precio_detalle) };
+  const keyDe = (id, tipo) => `${id}:${tipo}`;
+  const upcDe = (p) => Math.max(1, p.unidades_por_caja || 1);
+  const minPara = (p, tipo) => (tipo === 'mayor' ? Math.max(1, p.minimo_mayor || 1) : 1);
+  const unidadesDe = (i) => (i.tipo === 'mayor' ? i.cantidad * upcDe(i) : i.cantidad);
+  const precioUnit = (p, tipo) => {
+    const v = tipo === 'mayor' ? p.precio_mayor : p.precio_detalle;
+    return v === null || v === undefined ? null : Number(v);
+  };
+  const palabra = (tipo, n = 2) => (tipo === 'mayor' ? (n === 1 ? 'caja' : 'cajas') : (n === 1 ? 'unidad' : 'unidades'));
+
+  // Máximo de esa línea según el stock, descontando lo que ya hay en la otra línea del mismo producto
+  function maxPara(p, tipo, key) {
+    const otras = items.filter((i) => i.id === p.id && i.key !== key).reduce((a, i) => a + unidadesDe(i), 0);
+    const libre = Math.max(0, stockDe(p) - otras);
+    return tipo === 'mayor' ? Math.floor(libre / upcDe(p)) : libre;
   }
 
-  const snapshot = (p) => ({
-    id: p.id, nombre: p.nombre, unidad: p.unidad, unidad_mayor: p.unidad_mayor, codigo: p.codigo,
+  const snapshot = (p, tipo) => ({
+    key: keyDe(p.id, tipo), tipo, id: p.id, nombre: p.nombre, unidad: p.unidad, unidad_mayor: p.unidad_mayor, codigo: p.codigo,
     precio_detalle: p.precio_detalle, precio_mayor: p.precio_mayor, minimo_mayor: p.minimo_mayor,
-    foto: p.fotos?.[0] || '',
+    unidades_por_caja: p.unidades_por_caja, stock: p.stock, foto: p.fotos?.[0] || '',
   });
 
-  function agregar(p, cantidad = 1) {
-    const it = items.find((i) => i.id === p.id);
-    if (it) { it.cantidad += cantidad; Object.assign(it, snapshot(p), { cantidad: it.cantidad }); }
-    else items.push({ ...snapshot(p), cantidad });
+  function agregar(p, tipo, cantidad) {
+    const key = keyDe(p.id, tipo);
+    const it = items.find((i) => i.key === key);
+    if (precioUnit(p, tipo) === null) { toast('Ese producto no tiene precio para esta opción', 'error'); return false; }
+    const max = maxPara(p, tipo, key);
+    const nueva = (it ? it.cantidad : 0) + cantidad;
+    if (nueva > max) {
+      toast(max <= 0 ? 'Sin stock' : `Solo quedan ${max} ${palabra(tipo, max)}`, 'error');
+      return false;
+    }
+    if (it) Object.assign(it, snapshot(p, tipo), { cantidad: nueva });
+    else items.push({ ...snapshot(p, tipo), cantidad: nueva });
     guardar();
     toast(`Agregado: ${p.nombre}`);
+    return true;
   }
+
+  // Botón "Agregar" de la tarjeta: 1 unidad al detalle, o el mínimo de cajas al mayor
+  function agregarRapido(p) {
+    const tipo = esMayor(p) ? 'mayor' : 'detalle';
+    return agregar(p, tipo, minPara(p, tipo));
+  }
+
+  // "2 cajas de X" / "6 × X"
+  const lineaTxt = (i) => (i.tipo_precio === 'mayor'
+    ? `${i.cantidad} ${palabra('mayor', i.cantidad)} de ${i.nombre}`
+    : `${i.cantidad} × ${i.nombre}`);
 
   function totales() {
     let total = 0; let sinPrecio = false;
     const filas = items.map((i) => {
-      const pr = precioDe(i, i.cantidad);
-      if (pr.unit === null) sinPrecio = true;
-      const sub = pr.unit === null ? 0 : pr.unit * i.cantidad;
+      const unit = precioUnit(i, i.tipo);
+      if (unit === null) sinPrecio = true;
+      const sub = unit === null ? 0 : unit * i.cantidad;
       total += sub;
-      return { ...i, ...pr, sub };
+      return { ...i, unit, sub, max: maxPara(i, i.tipo, i.key), min: minPara(i, i.tipo) };
     });
     return { filas, total, sinPrecio };
   }
 
   // ---------- Selector en la ficha de producto ----------
   function montarEnFicha(cont, p) {
-    if (!cont || (p.precio_detalle === null && p.precio_mayor === null)) return;
-    const minInicial = state.modo === 'mayor' && p.precio_mayor !== null && p.minimo_mayor ? p.minimo_mayor : 1;
+    if (!cont) return;
+    const tipo = esMayor(p) ? 'mayor' : 'detalle';
+    const unit = precioUnit(p, tipo);
+    if (unit === null) return;
+    const min = minPara(p, tipo);
+    const max = maxPara(p, tipo, keyDe(p.id, tipo));
+    if (max < min) {
+      const sueltas = stockDe(p);
+      cont.innerHTML = tipo === 'mayor'
+        ? `<p class="nostock"><strong>Sin stock al mayor.</strong>${sueltas > 0 && precioUnit(p, 'detalle') !== null ? ` Quedan ${sueltas} unidades al detalle: cambia a "Al detalle" para comprarlas.` : ''}</p>`
+        : '<p class="nostock"><strong>Sin stock</strong></p>';
+      return;
+    }
     cont.innerHTML = `
       <div class="addcart">
         <div class="qty">
           <button type="button" data-d="-1" aria-label="Menos">−</button>
-          <input type="number" min="1" step="1" value="${minInicial}" aria-label="Cantidad">
+          <input type="number" min="${min}" max="${max}" step="1" value="${min}" aria-label="Cantidad de ${palabra(tipo)}">
           <button type="button" data-d="1" aria-label="Más">+</button>
         </div>
         <button type="button" class="btn addcart__btn">Agregar al carrito</button>
@@ -96,27 +137,24 @@
       <p class="addcart__hint" aria-live="polite"></p>`;
     const input = cont.querySelector('input');
     const hint = cont.querySelector('.addcart__hint');
+    const leer = () => Math.min(max, Math.max(min, parseInt(input.value, 10) || min));
     const pintar = () => {
-      const n = Math.max(1, parseInt(input.value, 10) || 1);
-      const pr = precioDe(p, n);
-      let txt = pr.unit === null ? 'Sin precio al detalle: consulta por WhatsApp.' : `${n} × ${precio(pr.unit)} = <strong>${precio(pr.unit * n)}</strong> (precio ${pr.tipo === 'mayor' ? 'al mayor' : 'al detalle'})`;
-      if (pr.tipo === 'detalle' && p.precio_mayor !== null && p.minimo_mayor && n < p.minimo_mayor) {
-        txt += `<br><span class="addcart__tip">Llevando ${p.minimo_mayor} o más pagas ${precio(p.precio_mayor)} c/u.</span>`;
-      }
-      hint.innerHTML = txt;
+      const n = leer();
+      const upc = upcDe(p);
+      hint.innerHTML = `${n} ${palabra(tipo, n)} × ${precio(unit)} = <strong>${precio(unit * n)}</strong>`
+        + (tipo === 'mayor' && upc > 1 ? ` (${n * upc} unidades)` : '')
+        + `<br><span class="addcart__tip">Disponible: ${max} ${palabra(tipo, max)}${tipo === 'mayor' ? ` · mínimo ${min}` : ''}</span>`;
     };
     cont.querySelector('.qty').addEventListener('click', (e) => {
       const d = +e.target.closest('[data-d]')?.dataset.d || 0;
       if (!d) return;
-      input.value = Math.max(1, (parseInt(input.value, 10) || 1) + d);
+      input.value = Math.min(max, Math.max(min, (parseInt(input.value, 10) || min) + d));
       pintar();
     });
     input.addEventListener('input', pintar);
+    input.addEventListener('change', () => { input.value = leer(); pintar(); });
     cont.querySelector('.addcart__btn').addEventListener('click', () => {
-      const n = Math.max(1, parseInt(input.value, 10) || 1);
-      if (precioDe(p, n).unit === null) return toast('Ese producto no tiene precio para esa cantidad', 'error');
-      agregar(p, n);
-      cerrarModal();
+      if (agregar(p, tipo, leer())) cerrarModal();
     });
     pintar();
   }
@@ -125,23 +163,24 @@
   function verCarrito() {
     const { filas, total, sinPrecio } = totales();
     const c = state.config;
-    const pagoOnline = c.pago_online_activo === 'si';
     const body = abrirModal(`
       <div class="cart">
         <h2>Tu pedido</h2>
         ${filas.length ? `
         <ul class="cart__list">
           ${filas.map((i) => `
-            <li class="cart__item" data-id="${i.id}">
+            <li class="cart__item" data-key="${esc(i.key)}">
               <div class="cart__img">${i.foto ? `<img src="${esc(urlFoto(i.foto))}" alt="">` : '<img src="assets/isotipo.svg" alt="" class="cart__ph">'}</div>
               <div class="cart__info">
                 <strong>${esc(i.nombre)}</strong>
                 ${(i.tipo === 'mayor' && i.unidad_mayor) || i.unidad ? `<small>${esc(i.tipo === 'mayor' && i.unidad_mayor ? i.unidad_mayor : i.unidad)}</small>` : ''}
-                <small class="cart__tipo cart__tipo--${i.tipo}">${i.unit === null ? 'Sin precio' : `${precio(i.unit)} c/u · ${i.tipo === 'mayor' ? 'al mayor' : 'al detalle'}`}</small>
+                <small class="cart__tipo cart__tipo--${i.tipo}">${i.unit === null ? 'Sin precio' : `${precio(i.unit)} ${i.tipo === 'mayor' ? 'por caja · al mayor' : 'c/u · al detalle'}`}</small>
+                ${i.tipo === 'mayor' && upcDe(i) > 1 ? `<small>${i.cantidad} ${palabra('mayor', i.cantidad)} = ${i.cantidad * upcDe(i)} unidades</small>` : ''}
+                ${i.cantidad > i.max ? `<small class="cart__warn">Solo quedan ${i.max} ${palabra(i.tipo, i.max)}: ajusta la cantidad.</small>` : ''}
               </div>
               <div class="qty qty--small">
                 <button type="button" data-d="-1" aria-label="Menos">−</button>
-                <input type="number" min="1" value="${i.cantidad}" aria-label="Cantidad">
+                <input type="number" min="${i.min}" max="${i.max}" value="${i.cantidad}" aria-label="Cantidad de ${palabra(i.tipo)}">
                 <button type="button" data-d="1" aria-label="Más">+</button>
               </div>
               <span class="cart__sub">${precio(i.sub)}</span>
@@ -149,7 +188,7 @@
             </li>`).join('')}
         </ul>
         <div class="cart__total"><span>Total</span><strong>${precio(total)}</strong></div>
-        ${sinPrecio ? '<p class="form__hint">Hay productos sin precio para esa cantidad; quítalos o consúltalos por WhatsApp.</p>' : ''}
+        ${sinPrecio ? '<p class="form__hint">Hay productos sin precio en esa opción; quítalos o consúltalos por WhatsApp.</p>' : ''}
 
         <form class="form cart__form" id="fPedido">
           <div class="pickup">
@@ -167,33 +206,38 @@
             <label>Teléfono *<input name="telefono" required type="tel" autocomplete="tel" placeholder="+56 9 1234 5678" value="${esc(storage.get('yy_cli_tel') || '')}"></label>
           </div>
           <label>Comentarios (opcional)<textarea name="notas" rows="2" placeholder="Ej: retiro el sábado en la mañana"></textarea></label>
-          <fieldset class="paymethods">
-            <legend>Forma de pago</legend>
-            ${pagoOnline ? '<label class="check"><input type="radio" name="pago" value="online" checked> Pagar online con Flow <small>(tarjetas, débito o transferencia)</small></label>' : ''}
-            <label class="check"><input type="radio" name="pago" value="en_tienda"${pagoOnline ? '' : ' checked'}> Pago al retirar en tienda</label>
-          </fieldset>
+          <div class="payinfo">
+            <strong>Pago seguro con Flow</strong>
+            <small>Tarjeta de crédito, débito o transferencia. Al terminar vuelves a esta página y ves tu pedido en curso.</small>
+          </div>
           <div class="form__actions">
             <button type="button" class="btn btn--ghost" data-vaciar>Vaciar</button>
-            <button type="submit" class="btn"${sinPrecio ? ' disabled' : ''}>Enviar pedido</button>
+            <button type="submit" class="btn"${sinPrecio || filas.some((i) => i.cantidad > i.max) ? ' disabled' : ''}>Pagar con Flow</button>
           </div>
         </form>` : `<p class="empty">Tu carrito está vacío.</p>`}
       </div>`, 'modal--wide');
 
     const list = body.querySelector('.cart__list');
+    const limitar = (it, n) => {
+      const max = maxPara(it, it.tipo, it.key); const min = minPara(it, it.tipo);
+      if (n > max) toast(max <= 0 ? 'Sin stock' : `Solo quedan ${max} ${palabra(it.tipo, max)}`, 'error');
+      return Math.max(min, Math.min(Math.max(max, min), n));
+    };
     list?.addEventListener('click', (e) => {
       const li = e.target.closest('.cart__item');
       if (!li) return;
-      const it = items.find((i) => String(i.id) === li.dataset.id);
+      const it = items.find((i) => i.key === li.dataset.key);
+      if (!it) return;
       if (e.target.closest('[data-del]')) items = items.filter((i) => i !== it);
       const d = +e.target.closest('[data-d]')?.dataset.d || 0;
-      if (d) it.cantidad = Math.max(1, it.cantidad + d);
+      if (d) it.cantidad = limitar(it, it.cantidad + d);
       if (e.target.closest('[data-del]') || d) { guardar(); verCarrito(); }
     });
     list?.addEventListener('change', (e) => {
       const li = e.target.closest('.cart__item');
-      const it = items.find((i) => String(i.id) === li?.dataset.id);
+      const it = items.find((i) => i.key === li?.dataset.key);
       if (!it) return;
-      it.cantidad = Math.max(1, parseInt(e.target.value, 10) || 1);
+      it.cantidad = limitar(it, parseInt(e.target.value, 10) || 1);
       guardar(); verCarrito();
     });
     body.querySelector('#fPedido [name=rut]')?.addEventListener('blur', (e) => { e.target.value = rutFormato(e.target.value); });
@@ -215,37 +259,40 @@
         storage.set('yy_cli_tel', f.telefono.value.trim());
         const { data, error: err } = await sb.rpc('yyplastic_crear_pedido', {
           p_cliente: { nombre: f.nombre.value, rut: f.rut.value, telefono: f.telefono.value, email: f.email.value, notas: f.notas.value },
-          p_items: items.map((i) => ({ producto_id: i.id, cantidad: i.cantidad })),
-          p_metodo_pago: f.pago.value,
+          p_items: items.map((i) => ({ producto_id: i.id, tipo: i.tipo, cantidad: i.cantidad })),
+          p_metodo_pago: 'online',
         });
         if (err) throw err;
-        const resumen = items.map((i) => `• ${i.cantidad} × ${i.nombre}`).join('\n');
         items = []; guardar();
-        if (f.pago.value === 'online') {
-          btn.textContent = 'Conectando con Flow…';
-          try { return await irAPagar(data.codigo); }
-          catch (err) { error(err); } // si falla, el pedido queda creado y puede pagarlo desde el seguimiento
-        }
-        confirmacion(data, f.nombre.value.trim(), resumen);
+        btn.textContent = 'Conectando con Flow…';
+        try { return await irAPagar(data.codigo); }
+        catch (err) { error(err); } // el pedido quedó creado: se puede reintentar el pago desde la confirmación
+        confirmacion(data, f.nombre.value.trim());
       } catch (err) { error(err); btn.disabled = false; }
     });
   }
 
-  function confirmacion(pedido, nombre, resumen) {
+  // Solo se muestra si Flow no pudo abrirse: el pedido ya existe y falta pagarlo
+  function confirmacion(pedido, nombre) {
     const urlSeg = `${location.origin}${location.pathname}?pedido=${pedido.codigo}`;
-    const wa = linkWhatsapp(`Hola Y&Y Plastic! Soy ${nombre}. Acabo de hacer el pedido #${pedido.folio} para retiro en tienda:\n${resumen}\nTotal: ${precio(pedido.total)}`);
-    abrirModal(`
+    const wa = linkWhatsapp(`Hola Y&Y Plastic! Soy ${nombre}. Tengo el pedido #${pedido.folio} (retiro en tienda) pendiente de pago por ${precio(pedido.total)} y necesito ayuda.`);
+    const body = abrirModal(`
       <div class="done">
         <img src="assets/isotipo.svg" alt="" class="done__icon">
-        <h2>¡Pedido #${pedido.folio} recibido!</h2>
+        <h2>Pedido #${pedido.folio} creado</h2>
         <p>Total: <strong>${precio(pedido.total)}</strong> · Retiro en tienda</p>
-        <p class="form__hint">${esc(state.config.retiro_instrucciones || 'Te contactaremos cuando esté listo.')}</p>
+        <p class="form__hint">Falta el pago. No pudimos abrir Flow; tu pedido quedó guardado, inténtalo de nuevo.</p>
         <div class="done__actions">
-          ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">Avisar por WhatsApp</a>` : ''}
+          <button type="button" class="btn" id="btnPagarAhora">Pagar con Flow</button>
           <a class="btn btn--ghost" href="${esc(urlSeg)}">Ver estado del pedido</a>
+          ${wa ? `<a class="btn btn--wa" href="${esc(wa)}" target="_blank" rel="noopener">Pedir ayuda por WhatsApp</a>` : ''}
         </div>
-        <p class="form__hint">Guarda este enlace para revisar tu pedido: <br><small class="done__link">${esc(urlSeg)}</small></p>
+        <p class="form__hint">Guarda este enlace para pagar o revisar tu pedido: <br><small class="done__link">${esc(urlSeg)}</small></p>
       </div>`);
+    body.querySelector('#btnPagarAhora').addEventListener('click', async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Conectando con Flow…';
+      try { await irAPagar(pedido.codigo); } catch (err) { error(err); e.target.disabled = false; e.target.textContent = 'Pagar con Flow'; }
+    });
   }
 
   // ---------- Seguimiento (?pedido=codigo) ----------
@@ -271,7 +318,7 @@
           <p class="form__hint">${esc(data.cliente_nombre)} · ${new Date(data.creado_en).toLocaleString('es-CL')}</p>
           ${data.estado === 'cancelado' ? '<p class="status status--cancelado">Pedido cancelado</p>' : `
           <ol class="steps">${pasos.map((s, i) => `<li class="${i <= idx ? 'is-done' : ''}">${ESTADOS[s]}</li>`).join('')}</ol>`}
-          <ul class="track__items">${data.items.map((i) => `<li><span>${i.cantidad} × ${esc(i.nombre)}</span><span>${precio(i.subtotal)}</span></li>`).join('')}</ul>
+          <ul class="track__items">${data.items.map((i) => `<li><span>${esc(lineaTxt(i))}</span><span>${precio(i.subtotal)}</span></li>`).join('')}</ul>
           <div class="cart__total"><span>Total</span><strong>${precio(data.total)}</strong></div>
           <p class="form__hint">Pago: ${data.metodo_pago === 'online' ? 'online con Flow' : 'al retirar en tienda'} · <strong class="pay pay--${data.estado_pago}">${PAGOS[data.estado_pago]}</strong></p>
           ${data.metodo_pago === 'online' && ['pendiente', 'fallido'].includes(data.estado_pago) && data.estado !== 'cancelado'
@@ -291,5 +338,5 @@
   const codigo = new URLSearchParams(location.search).get('pedido');
   if (codigo) seguimiento(codigo);
 
-  window.YYCarrito = { agregar, montarEnFicha, verCarrito, ESTADOS, PAGOS };
+  window.YYCarrito = { agregar, agregarRapido, montarEnFicha, verCarrito, lineaTxt, ESTADOS, PAGOS };
 })();
