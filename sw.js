@@ -1,7 +1,7 @@
 // Y&Y Plastic — service worker (permite instalar la app en el teléfono).
 // Archivos propios: primero la red (así cada publicación se ve al instante) y, sin conexión, la copia guardada.
 // Supabase, Flow y otros dominios no se tocan: siempre van directo a la red.
-const CACHE = 'yyplastic-v1';
+const CACHE = 'yyplastic-v2';
 const BASE = ['./', 'index.html', 'css/styles.css', 'css/pedidos.css', 'js/config.js', 'js/imagenes.js',
   'js/app.js', 'js/carrito.js', 'js/admin.js', 'js/pedidos-admin.js', 'assets/logo.svg',
   'assets/logo-horizontal.svg', 'assets/isotipo.svg', 'assets/icons/icon-192.png'];

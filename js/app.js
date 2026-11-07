@@ -138,7 +138,6 @@
   // ---------- Render: datos del negocio ----------
   function renderConfig() {
     const c = state.config;
-    document.title = `${c.nombre || 'Y&Y Plastic'} · Catálogo`;
     $('#footerEslogan').textContent = c.eslogan || '';
     $('#notaPrecio').textContent = state.modo === 'mayor' ? (c.nota_mayor || '') : 'Precios al detalle (por unidad o paquete).';
 

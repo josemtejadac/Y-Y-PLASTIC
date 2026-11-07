@@ -34,7 +34,7 @@
 --      POST /crear      -> crea el cobro en Flow y devuelve la URL de pago
 --      POST /confirmar  -> Flow avisa servidor a servidor; se consulta a Flow y se registra
 --      POST /retorno    -> el cliente vuelve de Flow; se registra y redirige a
---                          https://y-y-plastic.pages.dev/?pedido=<codigo>&pago=<estado>
+--                          https://yyplastic.cl/?pedido=<codigo>&pago=<estado>
 --    Dominios permitidos (CORS/retorno): ver SITIOS en la función.
 --  * Funciones solo para el servidor (service_role): yyplastic_flow_credenciales, yyplastic_pedido_para_pago,
 --    yyplastic_pedido_guardar_token, yyplastic_pago_registrar (verifica que el monto pagado = total del pedido).

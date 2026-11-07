@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+# Seguimiento de pedidos (llevan un código privado) y acceso de administrador: no se indexan
+Disallow: /*?pedido=
+Disallow: /*?admin
+
+Sitemap: https://yyplastic.cl/sitemap.xml
